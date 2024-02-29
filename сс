@@ -1,0 +1,58 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
+contract SafetyAndEarn {
+    using SafeERC20 for IERC20;
+
+    mapping(address => uint256) public balances;
+    mapping(address => uint256) public stakingBalances;
+    mapping(address => uint256) public rewardsEarned;
+
+    IERC20 public token; // The token users can stake
+    uint256 public totalStaked;
+    uint256 public totalRewards;
+    uint256 public rewardRate;
+
+    event Staked(address indexed user, uint256 amount);
+    event Withdrawn(address indexed user, uint256 amount);
+    event RewardPaid(address indexed user, uint256 reward);
+
+    constructor(address _token, uint256 _rewardRate) {
+        token = IERC20(_token);
+        rewardRate = _rewardRate;
+    }
+
+    function stake(uint256 amount) external {
+        require(amount > 0, "Amount must be greater than 0");
+        token.safeTransferFrom(msg.sender, address(this), amount);
+        stakingBalances[msg.sender] += amount;
+        totalStaked += amount;
+        emit Staked(msg.sender, amount);
+    }
+
+    function withdraw(uint256 amount) external {
+        require(amount > 0, "Amount must be greater than 0");
+        require(stakingBalances[msg.sender] >= amount, "Insufficient staked amount");
+        uint256 reward = calculateReward(msg.sender);
+        rewardsEarned[msg.sender] += reward;
+        totalRewards += reward;
+        stakingBalances[msg.sender] -= amount;
+        totalStaked -= amount;
+        token.safeTransfer(msg.sender, amount);
+        emit Withdrawn(msg.sender, amount);
+    }
+
+    function claimReward() external {
+        uint256 reward = calculateReward(msg.sender);
+        rewardsEarned[msg.sender] += reward;
+        totalRewards += reward;
+        emit RewardPaid(msg.sender, reward);
+    }
+
+    function calculateReward(address account) internal view returns (uint256) {
+        return (stakingBalances[account] * rewardRate) / 1e18;
+    }
+}
